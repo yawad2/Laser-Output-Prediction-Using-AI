@@ -17,12 +17,12 @@ from sklearn.model_selection import train_test_split
 epsilon = 1e-8 
 mse = nn.MSELoss()
 
-def dice_loss(pred, target, smooth=1.0):
-    intersection = (pred * target).sum(dim=(2, 3))
-    union = pred.sum(dim=(2, 3)) + target.sum(dim=(2, 3))
-    # compute dice coefficient
-    dice = (2. * intersection + smooth) / (union + smooth)
-    return 1 - dice.mean()  # return the loss
+# def dice_loss(pred, target, smooth=1.0):
+#     intersection = (pred * target).sum(dim=(2, 3))
+#     union = pred.sum(dim=(2, 3)) + target.sum(dim=(2, 3))
+#     # compute dice coefficient
+#     dice = (2. * intersection + smooth) / (union + smooth)
+#     return 1 - dice.mean()  # return the loss
 
 
 def log_cosh_loss(pred, target):
@@ -352,3 +352,33 @@ def compute_energy_difference_percentage(preds, targets):
     target_energy = np.sum(targets, axis=(1, 2)) * joules_scaler
     diff_percent = ((target_energy - pred_energy) / (target_energy + 1e-8)) * 100
     return diff_percent
+
+
+def save_heatmaps(images, titles, path, colorscale=True, cbar_title='Intensity'):
+    fig = plt.figure(figsize=(16, 4))  # Adjust the figure size as needed
+    gs = gridspec.GridSpec(1, len(images) + 1, width_ratios=[1]*len(images) + [0.05])
+
+    # Global min and max for consistent color scaling (using the ground truth image as reference)
+    global_min = np.min(images[0])
+    global_max = np.max(images[0])
+
+    for i, img in enumerate(images):
+        ax = fig.add_subplot(gs[i])
+        if i == 0:  # No scaling for the input image
+            im = ax.imshow(img, cmap='jet')
+        else:  # Scaled images
+            im = ax.imshow(img, cmap='jet', vmin=global_min, vmax=global_max)
+        ax.set_title(titles[i])
+        ax.axis('off')
+
+    # if colorscale:
+        # cbar_ax = fig.add_subplot(gs[-1])
+        # cbar = fig.colorbar(im, cax=cbar_ax)
+        # cbar.set_label(cbar_title)
+    
+    run, subrun = extract_run_subrun_df(path)
+    fig.suptitle(f"Run {run}, Subrun {subrun}", fontsize=16)
+
+    fig.subplots_adjust(wspace=0.1, top=0.85)
+    fig.savefig(path, bbox_inches='tight')
+    plt.close(fig)

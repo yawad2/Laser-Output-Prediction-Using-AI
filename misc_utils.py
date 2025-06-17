@@ -382,3 +382,20 @@ def save_heatmaps(images, titles, path, colorscale=True, cbar_title='Intensity')
     fig.subplots_adjust(wspace=0.1, top=0.85)
     fig.savefig(path, bbox_inches='tight')
     plt.close(fig)
+
+def generate_video(image_folder, video_name):
+    images = [img for img in os.listdir(image_folder) if img.endswith(".png")]
+    images.sort(key=extract_subrun_number)  # Sort by subrun number
+    print("Sorted images:", images)
+
+    frame = cv2.imread(os.path.join(image_folder, images[0]))
+    height, width, layers = frame.shape
+
+    video = cv2.VideoWriter(video_name, cv2.VideoWriter_fourcc(*'DIVX'), 1, (width, height))
+
+    for image in images:
+        video.write(cv2.imread(os.path.join(image_folder, image)))
+
+    video.release()
+    print("Video generated successfully!")
+

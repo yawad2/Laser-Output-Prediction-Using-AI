@@ -18,3 +18,10 @@ Main training script that:
 - Saves trained models and loss plots  
 - Exports input, target, and prediction data as CSV files  
 - Organizes outputs in a structured directory per experiment
+
+### `visualize_images.ipynb`
+Contains logic for:
+- Saving heatmaps for input, target, prediction, and difference (target - prediction) from csv files
+- Generating video for a folder of images (eg. a video of all subruns' heatmaps for a given run)
+- Generating boxplots for the energy % error
+

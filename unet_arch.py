@@ -32,6 +32,31 @@ def upsample(input_channels, output_channels, kernel_size, apply_batchnorm=True,
 
     return nn.Sequential(*layers)
 
+class AttentionBlock(nn.Module):
+    def __init__(self, F_g, F_l, F_int): # F_g: number of input channels for the gate, F_l: number of channels for the encoder features (skip connection), F_int: number of intermediate channels
+        super(AttentionBlock, self).__init__()
+        self.W_g = nn.Sequential(
+            nn.Conv2d(F_g, F_int, 1, stride=1, padding=0, bias=True),
+            nn.BatchNorm2d(F_int)
+        )
+        self.W_x = nn.Sequential(
+            nn.Conv2d(F_l, F_int, 1, stride=1, padding=0, bias=True),
+            nn.BatchNorm2d(F_int)
+        )
+        self.psi = nn.Sequential(
+            nn.Conv2d(F_int, 1, 1, stride=1, padding=0, bias=True),
+            nn.BatchNorm2d(1),
+            nn.Sigmoid()
+        )
+        self.relu = nn.ReLU(inplace=True)
+    
+    def forward(self, g, x):
+        g1 = self.W_g(g)
+        x1 = self.W_x(x)
+        psi = self.relu(g1 + x1)
+        psi = self.psi(psi)
+        return x * psi #attention-weighted skip connection
+
 class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
@@ -61,6 +86,18 @@ class Generator(nn.Module):
 
         # Final convolutional layer for generating the output
         self.last = nn.ConvTranspose2d(128, 1, 4, stride=2, padding=1)
+        
+        # add attention blocks
+        self.attn_blocks = nn.ModuleList([
+            AttentionBlock(512, 512, 256),
+            AttentionBlock(512, 512, 256),
+            AttentionBlock(512, 512, 256),
+            AttentionBlock(512, 512, 256),
+            AttentionBlock(256, 256, 128),
+            AttentionBlock(128, 128, 64),
+            AttentionBlock(64, 64, 32)
+        ])
+        
 
     def forward(self, x):
         # Downsampling through the model
@@ -69,16 +106,18 @@ class Generator(nn.Module):
             x = layer(x)
             skips.append(x)
 
-        skips = skips[:-1]
+        
+        skips = skips[:-1] # exclude bottleneck
 
         # Upsampling and establishing skip connections
-        for layer, skip in zip(self.up_layers, reversed(skips)):
-            x = layer(x)
-            x = torch.cat([x, skip], dim=1)
-
+        for i, (up, attn) in enumerate(zip(self.up_layers, self.attn_blocks)):
+            x = up(x)
+            skip = skips[-(i + 1)]
+            gated_skip = attn(g=x, x=skip)
+            x = torch.cat([x, gated_skip], dim=1)
+            
         x = self.last(x)
         return x
-
 
 def load_model_state(file_path):
     model_state = Generator()  # Assuming Generator is a defined class

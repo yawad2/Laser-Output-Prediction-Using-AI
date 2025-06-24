@@ -33,7 +33,7 @@ test_loader = DataLoader(test_dataset, batch_size=batch_size)
 
 # Define loss functions to be used
 train_losses = {
-    "DICE": dice_loss
+    "Hybrid (0.96 L1, 0.04 abs. UV error)": hybrid_loss
 }
 
 # Set device and check for GPU availability

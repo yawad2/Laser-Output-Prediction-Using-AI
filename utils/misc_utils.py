@@ -8,53 +8,64 @@ import torch.nn as nn
 import re
 from sklearn.model_selection import train_test_split
 
-# def custom_loss_fn(pred, target):
-# 	joules_Scaler = 0.0333958286584664
-# 	pred_energy = torch.sum(pred) * joules_Scaler
-# 	target_energy = torch.sum(target) * joules_Scaler
-# 	return torch.abs(target_energy - pred_energy)
-
+# Constants
 epsilon = 1e-8 
-mse = nn.MSELoss()
+joules_scaler = 0.0333958286584664
 
-# def dice_loss(pred, target, smooth=1.0):
-#     intersection = (pred * target).sum(dim=(2, 3))
-#     union = pred.sum(dim=(2, 3)) + target.sum(dim=(2, 3))
-#     # compute dice coefficient
-#     dice = (2. * intersection + smooth) / (union + smooth)
-#     return 1 - dice.mean()  # return the loss
+def hybrid_loss(pred, target):
+    """Hybrid loss function that combines L1 loss and absolute UV energy error.
+    Args:
+        pred (torch.Tensor): The predicted output.
+        target (torch.Tensor): The ground truth output.
+    """
+    L1_loss_fn = nn.L1Loss()
+    abs_uv_error = abs_energy_per_loss(pred, target)
+    L1_loss = L1_loss_fn(pred, target)
+    
+    # Combine losses
+    hybrid_loss_value = 0.96 * L1_loss + 0.04 * abs_uv_error
+    
+    return hybrid_loss_value
 
 
 def log_cosh_loss(pred, target):
+    """Log-Cosh loss function.
+    Args:
+        pred (torch.Tensor): The predicted output.
+        target (torch.Tensor): The ground truth output.
+    """
     diff = pred - target
     return torch.mean(torch.log(torch.cosh(diff) + epsilon))
 
 def RMSLE_loss(pred, target):
+    """Root Mean Squared Logarithmic Error (RMSLE) loss function.
+    Args:
+        pred (torch.Tensor): The predicted output.
+        target (torch.Tensor): The ground truth output.
+    """
+    mse = nn.MSELoss()
     pred_clamped = torch.clamp(pred, min=0)
     target_clamped = torch.clamp(target, min=0)
     return torch.sqrt(mse(torch.log(pred_clamped + 1), torch.log(target_clamped + 1)) + epsilon)
 
-def focal_huber_loss(pred, target, degree=4, delta=1.0):
-    error = pred - target
-    abs_error = torch.abs(error)
-    degree_term = torch.min(abs_error, torch.tensor(delta, device=abs_error.device, dtype=abs_error.dtype))
-    linear = abs_error - degree_term
-    loss = 0.5 * degree_term ** degree + delta * linear
-    return torch.mean(loss)
-
 def energy_per_loss(pred, target):
+    """Calculates the energy difference between target and prediction as a percentage."""
     return (get_energy_tensor(target) - get_energy_tensor(pred)) / (get_energy_tensor(target)+epsilon)
 
 def abs_energy_per_loss(pred, target):
+    """Calculates the absolute energy difference between target and prediction as a percentage."""
     return torch.abs(get_energy_tensor(target) - get_energy_tensor(pred)) / (get_energy_tensor(target)+ epsilon)
 
 def MARE_loss(output, target):
+    """Mean Absolute Relative Error (MARE) loss function."""
     return torch.mean(torch.abs(target - output) / (torch.abs(target) + epsilon))
 
 def MAPE_loss(output, target):
+    """Mean Absolute Percentage Error (MAPE) loss function."""
     return torch.mean(torch.abs((target - output) / (target+epsilon))) * 100
 
 def get_heatmaps(images, titles, colorscale=True, cbar_title='Intensity'):
+    """Function to plot a series of heatmaps in a single figure."""
     fig = plt.figure(figsize=(16, 4))  # Adjust the figure size as needed
     gs = gridspec.GridSpec(1, len(images) + 1, width_ratios=[1]*len(images) + [0.05])
 
@@ -80,16 +91,17 @@ def get_heatmaps(images, titles, colorscale=True, cbar_title='Intensity'):
 
 
 def get_energy(image):
-    joules_Scaler = 0.0333958286584664
-    energy = np.sum(image) * joules_Scaler
+    """Calculates the energy of an image as the sum of its pixel values scaled by a constant."""
+    energy = np.sum(image) * joules_scaler
     return energy
 
 def get_energy_tensor(image):
-    joules_Scaler = 0.0333958286584664
-    energy = torch.sum(image) * joules_Scaler
+    """Calculates the energy of a PyTorch tensor image as the sum of its pixel values scaled by a constant."""
+    energy = torch.sum(image) * joules_scaler
     return energy
 
 def save_inp_pred_tar(inputs, preds, targets, run_subrun_list, destination_folder):
+    """Saves input, prediction, and target images to CSV files in the specified destination folder."""
     os.makedirs(destination_folder, exist_ok=True)
 
     for i in range(len(inputs)):
@@ -109,6 +121,7 @@ def save_inp_pred_tar(inputs, preds, targets, run_subrun_list, destination_folde
     print(f"Saved inputs, predictions, and targets in {destination_folder}")
 
 def predict(model, inputs, device):
+    """Predicts outputs using the provided model and input data."""
     model.eval()
     inputs_tensor = torch.from_numpy(inputs).float().to(device)
     with torch.no_grad():
@@ -117,6 +130,7 @@ def predict(model, inputs, device):
     return outputs
 
 def get_df_3images(folder_path):
+    """Reads prediction, target, and input files from a specified folder and returns a DataFrame."""
     predictions_files_list = [f for f in os.listdir(folder_path) if "pred_" in f]
     targets_files_list = [f for f in os.listdir(folder_path) if "target_" in f]
     input_files_list = [f for f in os.listdir(folder_path) if "input_" in f]
@@ -134,6 +148,7 @@ def get_df_3images(folder_path):
     return df
 
 def extract_run_subrun(path):
+    """Extracts run and subrun numbers from a file path."""
     match = re.search(r'Run_(\d+)_.*InjEnergyFactor_(\d+)', path)
     if match:
         run = int(match.group(1))
@@ -143,6 +158,9 @@ def extract_run_subrun(path):
         return None
 
 def load_data_from_folders(folder_list):
+    """
+    Loads input and output data from a list of folder paths.
+    """
     input_data = []
     output_data = []
     subruns = []
@@ -162,7 +180,15 @@ def load_data_from_folders(folder_list):
     subruns_array = np.array(subruns)
     return input_data, output_data, subruns_array, test_files_paths
 
-def duplicate_low_subrun_samples(X_train_np, y_train_np, subruns_train, threshold=7, num_duplicates=3):
+def duplicate_low_subrun_samples(X_train_np, y_train_np, subruns_train, threshold=5, num_duplicates=7):
+    """Duplicates samples in the training set where the subrun number is below a specified threshold.
+    Args:
+        X_train_np (np.ndarray): Training input data.
+        y_train_np (np.ndarray): Training target data.
+        subruns_train (np.ndarray): Subrun numbers corresponding to the training samples.
+        threshold (int): The subrun threshold below which samples will be duplicated.
+        num_duplicates (int): The number of times to duplicate each low subrun sample.
+    """
     low_indices = np.where(subruns_train <= threshold)[0]
     print(f"Number of train samples with subrun <= {threshold}: {len(low_indices)}")
     print(f"Number of train samples with subrun > {threshold}: {subruns_train.shape[0] - len(low_indices)}")
@@ -184,6 +210,11 @@ def duplicate_low_subrun_samples(X_train_np, y_train_np, subruns_train, threshol
 
 
 def get_torch_dataset_split_by_run(master_folder):
+    """Loads data from a master folder containing subfolders (runs) with input and output CSV files.
+    Splits the data into training and testing sets based on runs, and returns the data as NumPy arrays.
+    Args:
+        master_folder (str): Path to the master folder containing subfolders with data.
+    """
     # Load and split data by folder
     subfolder_data = []
 
@@ -213,6 +244,15 @@ def get_torch_dataset_split_by_run(master_folder):
 
 
 def plot_region_losses(train_losses, test_losses, train_subruns, test_subruns, loss_name, save_path):
+    """Plots the average loss for training and testing datasets by subrun.
+    Args:
+        train_losses (dict): Dictionary containing training losses for low and high subruns.
+        test_losses (dict): Dictionary containing testing losses for low and high subruns.
+        train_subruns (list): List of subrun numbers for training data.
+        test_subruns (list): List of subrun numbers for testing data.
+        loss_name (str): Name of the loss function to be used in the plot.
+        save_path (str): Path to save the plot.
+    """
     # Convert to numpy arrays for indexing
     train_subruns = np.array(train_subruns)
     test_subruns = np.array(test_subruns)
@@ -251,6 +291,7 @@ def plot_region_losses(train_losses, test_losses, train_subruns, test_subruns, l
     print(f"Saved combined plot to {save_path}")
 
 def evaluate(model, dataloader, device):
+    """Evaluates the model on the provided dataloader and computes various loss metrics."""
     model.eval()
     mse_loss_fn = nn.MSELoss()
     l1_loss_fn = nn.L1Loss()
@@ -289,9 +330,10 @@ def evaluate(model, dataloader, device):
 
 
 def get_plot_two_lines(data1, label1, data2, label2, x_label, y_label, title, save_path):
+    """Plots two lines on the same graph and saves the figure."""
     plt.figure()
-    plt.plot(data1, label = label1)
-    plt.plot(data2, label = label2)
+    plt.plot(data1, label=label1)
+    plt.plot(data2, label=label2)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
     plt.title(title)
@@ -303,6 +345,7 @@ def get_plot_two_lines(data1, label1, data2, label2, x_label, y_label, title, sa
 
 
 def get_plot_one_line(data, label, x_label, y_label, title, save_path):
+    """Plots a single line on a graph and saves the figure."""
     plt.figure()
     plt.plot(data, label=label)
     plt.xlabel(x_label)
@@ -315,6 +358,7 @@ def get_plot_one_line(data, label, x_label, y_label, title, save_path):
 
 
 def evaluate_by_region(model, inputs, targets, subruns, device):
+    """Evaluates the model on inputs and targets, calculating losses for low and high subrun regions."""
     model.eval()
     inputs_tensor = torch.from_numpy(inputs).float().to(device)
     targets_tensor = torch.from_numpy(targets).float().to(device)
@@ -347,55 +391,8 @@ def evaluate_by_region(model, inputs, targets, subruns, device):
     return losses
 
 def compute_energy_difference_percentage(preds, targets):
-    joules_scaler = 0.0333958286584664
+    """Calculates the percentage difference in UV energy between predictions and targets."""
     pred_energy = np.sum(preds, axis=(1, 2)) * joules_scaler
     target_energy = np.sum(targets, axis=(1, 2)) * joules_scaler
     diff_percent = ((target_energy - pred_energy) / (target_energy + 1e-8)) * 100
     return diff_percent
-
-
-def save_heatmaps(images, titles, path, colorscale=True, cbar_title='Intensity'):
-    fig = plt.figure(figsize=(16, 4))  # Adjust the figure size as needed
-    gs = gridspec.GridSpec(1, len(images) + 1, width_ratios=[1]*len(images) + [0.05])
-
-    # Global min and max for consistent color scaling (using the ground truth image as reference)
-    global_min = np.min(images[0])
-    global_max = np.max(images[0])
-
-    for i, img in enumerate(images):
-        ax = fig.add_subplot(gs[i])
-        if i == 0:  # No scaling for the input image
-            im = ax.imshow(img, cmap='jet')
-        else:  # Scaled images
-            im = ax.imshow(img, cmap='jet', vmin=global_min, vmax=global_max)
-        ax.set_title(titles[i])
-        ax.axis('off')
-
-    # if colorscale:
-        # cbar_ax = fig.add_subplot(gs[-1])
-        # cbar = fig.colorbar(im, cax=cbar_ax)
-        # cbar.set_label(cbar_title)
-    
-    run, subrun = extract_run_subrun_df(path)
-    fig.suptitle(f"Run {run}, Subrun {subrun}", fontsize=16)
-
-    fig.subplots_adjust(wspace=0.1, top=0.85)
-    fig.savefig(path, bbox_inches='tight')
-    plt.close(fig)
-
-def generate_video(image_folder, video_name):
-    images = [img for img in os.listdir(image_folder) if img.endswith(".png")]
-    images.sort(key=extract_subrun_number)  # Sort by subrun number
-    print("Sorted images:", images)
-
-    frame = cv2.imread(os.path.join(image_folder, images[0]))
-    height, width, layers = frame.shape
-
-    video = cv2.VideoWriter(video_name, cv2.VideoWriter_fourcc(*'DIVX'), 1, (width, height))
-
-    for image in images:
-        video.write(cv2.imread(os.path.join(image_folder, image)))
-
-    video.release()
-    print("Video generated successfully!")
-

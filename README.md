@@ -10,7 +10,7 @@ Contains utility functions for:
 - Data loading  
 - Energy calculation  
 - Custom loss functions  
-- Visualization and plotting  
+- Visualization and plotting 
 
 ### `train_pipeline.py`
 Main training script that:
@@ -20,7 +20,7 @@ Main training script that:
 - Organizes outputs in a structured directory per experiment
 
 ### `eval/visualize_images.ipynb`
-Contains logic for:
+Notebook for post-training analysis:
 - Saving heatmaps for input, target, prediction, and difference (target - prediction) from csv files
 - Generating video for a folder of images (eg. a video of all subruns' heatmaps for a given run)
 - Generating boxplots for the energy % error

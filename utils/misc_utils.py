@@ -12,6 +12,13 @@ from sklearn.model_selection import train_test_split
 epsilon = 1e-8 
 joules_scaler = 0.0333958286584664
 
+def relative_loss(pred, target):
+    """ log accuracy ratio loss from Tofallis (2013) paper."""
+    ratio = (pred + epsilon) / (target + epsilon)
+    log_ratio = torch.log(ratio)
+    loss = torch.abs(log_ratio)
+    return loss.mean()
+
 def hybrid_loss(pred, target):
     """Hybrid loss function that combines L1 loss and absolute UV energy error.
     Args:

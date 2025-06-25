@@ -154,6 +154,29 @@ def get_df_3images(folder_path):
     })
     return df
 
+def get_df(folder_path):
+    """returns a DataFrame with columns: run, subrun, prediction, target, input"""
+    predictions_files = sorted([f for f in os.listdir(folder_path) if "pred_" in f])
+    targets_files = sorted([f for f in os.listdir(folder_path) if "target_" in f])
+    input_files = sorted([f for f in os.listdir(folder_path) if "input_" in f])
+
+    data = []
+    for pred_file, target_file, input_file in zip(predictions_files, targets_files, input_files):
+        run, subrun = extract_run_subrun_df(pred_file)
+        pred = pd.read_csv(os.path.join(folder_path, pred_file), header=None)
+        target = pd.read_csv(os.path.join(folder_path, target_file), header=None)
+        inp = pd.read_csv(os.path.join(folder_path, input_file), header=None)
+        data.append({
+            'run': run,
+            'subrun': subrun,
+            'prediction': pred,
+            'target': target,
+            'input': inp
+        })
+
+    df = pd.DataFrame(data)
+    return df
+
 def extract_run_subrun(path):
     """Extracts run and subrun numbers from a file path."""
     match = re.search(r'Run_(\d+)_.*InjEnergyFactor_(\d+)', path)

@@ -141,7 +141,7 @@ class HierarchicalAttention(nn.Module):
         multi_scale_features = []
         
         for scale, attention in zip(self.scales, self.attentions):
-            if scale > 1:
+            if scale > 1 and (H % scale == 0) and (W % scale == 0):
                 # Downsample
                 x_scaled = F.avg_pool2d(x, scale, scale)
                 # Apply attention

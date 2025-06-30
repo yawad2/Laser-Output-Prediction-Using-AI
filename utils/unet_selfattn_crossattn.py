@@ -3,6 +3,36 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
+def downsample(input_channels, output_channels, kernel_size, apply_batchnorm=True, dropout_prob=0.0, weight_mean=0, weight_sd=0.02):
+    layers = [nn.Conv2d(input_channels, output_channels, kernel_size, stride=2, padding=1, bias=False)]
+
+    # Initialize the weights with mean and standard deviation
+    nn.init.normal_(layers[0].weight, mean=weight_mean, std=weight_sd)
+
+    if apply_batchnorm:
+        layers.append(nn.BatchNorm2d(output_channels))
+    layers.append(nn.LeakyReLU(0.2))
+
+    if dropout_prob > 0.0:
+        layers.append(nn.Dropout(dropout_prob))
+
+    return nn.Sequential(*layers)
+
+def upsample(input_channels, output_channels, kernel_size, apply_batchnorm=True, dropout_prob=0.0, weight_mean=0, weight_sd=0.02):
+    layers = [nn.ConvTranspose2d(input_channels, output_channels, kernel_size, stride=2, padding=1, bias=False)]
+
+    # Initialize the weights with mean and standard deviation
+    nn.init.normal_(layers[0].weight, mean=weight_mean, std=weight_sd)
+
+    if apply_batchnorm:
+        layers.append(nn.BatchNorm2d(output_channels))
+    layers.append(nn.ReLU())
+
+    if dropout_prob > 0.0:
+        layers.append(nn.Dropout(dropout_prob))
+
+    return nn.Sequential(*layers)
+    
 class FullSelfAttention(nn.Module):
 
     def __init__(self, in_channels, num_heads=8, dropout=0.1):
